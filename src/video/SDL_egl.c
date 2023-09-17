@@ -498,6 +498,20 @@ static void SDL_EGL_GetVersion(_THIS)
     }
 }
 
+#define EGL_PLATFORM_ANGLE_ANGLE                       0x3202
+#define EGL_PLATFORM_ANGLE_TYPE_ANGLE                  0x3203
+#define EGL_PLATFORM_ANGLE_MAX_VERSION_MAJOR_ANGLE     0x3204
+#define EGL_PLATFORM_ANGLE_MAX_VERSION_MINOR_ANGLE     0x3205
+#define EGL_PLATFORM_ANGLE_TYPE_D3D9_ANGLE             0x3207
+#define EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE            0x3208
+#define EGL_PLATFORM_ANGLE_TYPE_VULKAN_ANGLE           0x3450
+#define EGL_PLATFORM_ANGLE_TYPE_OPENGL_ANGLE           0x320D
+#define EGL_PLATFORM_ANGLE_DEVICE_TYPE_ANGLE           0x3209
+#define EGL_PLATFORM_ANGLE_DEVICE_TYPE_WARP_ANGLE      0x320B
+#define EGL_PLATFORM_ANGLE_ENABLE_AUTOMATIC_TRIM_ANGLE 0x320F
+
+#define EGL_ANGLE_DISPLAY_ALLOW_RENDER_TO_BACK_BUFFER 0x320B
+
 int SDL_EGL_LoadLibrary(_THIS, const char *egl_path, NativeDisplayType native_display, EGLenum platform)
 {
     int library_load_retcode = SDL_EGL_LoadLibraryOnly(_this, egl_path);
@@ -509,7 +523,7 @@ int SDL_EGL_LoadLibrary(_THIS, const char *egl_path, NativeDisplayType native_di
 
 #if !defined(__WINRT__)
 #if !defined(SDL_VIDEO_DRIVER_VITA)
-    if (platform) {
+    /* if (platform)*/ {
         /* EGL 1.5 allows querying for client version with EGL_NO_DISPLAY
          * --
          * Khronos doc: "EGL_BAD_DISPLAY is generated if display is not an EGL display connection, unless display is EGL_NO_DISPLAY and name is EGL_EXTENSIONS."
@@ -518,26 +532,87 @@ int SDL_EGL_LoadLibrary(_THIS, const char *egl_path, NativeDisplayType native_di
          * - it works on desktop X11 (using SDL_VIDEO_X11_FORCE_EGL=1) */
         SDL_EGL_GetVersion(_this);
 
-        if (_this->egl_data->egl_version_major == 1 && _this->egl_data->egl_version_minor == 5) {
+        /*if (_this->egl_data->egl_version_major == 1 && _this->egl_data->egl_version_minor == 5) {
             LOAD_FUNC(eglGetPlatformDisplay);
-        }
+        }*/
 
-        if (_this->egl_data->eglGetPlatformDisplay) {
+        /* if (_this->egl_data->eglGetPlatformDisplay) {
             _this->egl_data->egl_display = _this->egl_data->eglGetPlatformDisplay(platform, (void *)(uintptr_t)native_display, NULL);
-        } else {
+        } else*/ {
             if (SDL_EGL_HasExtension(_this, SDL_EGL_CLIENT_EXTENSION, "EGL_EXT_platform_base")) {
+
+                /*const EGLint d3d11DisplayAttributes[] = {
+                    EGL_PLATFORM_ANGLE_TYPE_ANGLE,
+                    EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE,
+                    EGL_ANGLE_DISPLAY_ALLOW_RENDER_TO_BACK_BUFFER,
+                    EGL_TRUE,
+                    EGL_PLATFORM_ANGLE_ENABLE_AUTOMATIC_TRIM_ANGLE,
+                    EGL_TRUE,
+                    EGL_NONE,
+                };*/
+
+                /*const EGLint openglDisplayAttributes[] = {
+                    EGL_PLATFORM_ANGLE_TYPE_ANGLE,
+                    EGL_PLATFORM_ANGLE_TYPE_OPENGL_ANGLE,
+                    EGL_ANGLE_DISPLAY_ALLOW_RENDER_TO_BACK_BUFFER,
+                    EGL_TRUE,
+                    EGL_NONE
+                };*/
+
+                /*const EGLint d3d9DisplayAttributes[] = {
+                    EGL_PLATFORM_ANGLE_TYPE_ANGLE,
+                    EGL_PLATFORM_ANGLE_TYPE_D3D9_ANGLE,
+                    EGL_ANGLE_DISPLAY_ALLOW_RENDER_TO_BACK_BUFFER,
+                    EGL_TRUE,
+                    EGL_NONE
+                };*/
+
+                /*const EGLint vulkanDisplayAttributes[] = {
+                    EGL_PLATFORM_ANGLE_TYPE_ANGLE,
+                    EGL_PLATFORM_ANGLE_TYPE_VULKAN_ANGLE,
+                    EGL_PLATFORM_ANGLE_ENABLE_AUTOMATIC_TRIM_ANGLE,
+                    EGL_TRUE,
+                    EGL_NONE
+                };*/
+
+                #define maxAccessibleAttributes 32
+
+                EGLint displayAttributes[maxAccessibleAttributes+1] = { 0 };
+                displayAttributes[maxAccessibleAttributes] = EGL_NONE;
+
+                EGLint *displayAttributesFinal = 0;
+
+                for (int i = 0; i != maxAccessibleAttributes; ++i) {
+                    char hintNameBuf[64] = { 0 };
+                    SDL_snprintf(hintNameBuf, 63, "SDL_PLATFORM_DISPLAY_ATTRIB%d", i);
+                    const char *hintValue = SDL_GetHint(hintNameBuf);
+                    if (hintValue) {
+                        displayAttributesFinal = displayAttributes;
+                        displayAttributes[i] = SDL_atoi(hintValue);
+                    } else {
+                        break;
+                    }
+                }
+
+                #undef maxAccessibleAttributes
+
                 _this->egl_data->eglGetPlatformDisplayEXT = SDL_EGL_GetProcAddress(_this, "eglGetPlatformDisplayEXT");
                 if (_this->egl_data->eglGetPlatformDisplayEXT) {
-                    _this->egl_data->egl_display = _this->egl_data->eglGetPlatformDisplayEXT(platform, (void *)(uintptr_t)native_display, NULL);
+                    _this->egl_data->egl_display = _this->egl_data->eglGetPlatformDisplayEXT(EGL_PLATFORM_ANGLE_ANGLE, (void *)(uintptr_t)native_display, displayAttributesFinal);
+                } else {
+                    return SDL_SetError("eglGetPlatformDisplayEXT not found");
                 }
+
+            } else {
+                return SDL_SetError("EGL_EXT_platform_base not found");
             }
         }
     }
 #endif
     /* Try the implementation-specific eglGetDisplay even if eglGetPlatformDisplay fails */
-    if ((_this->egl_data->egl_display == EGL_NO_DISPLAY) && (_this->egl_data->eglGetDisplay != NULL)) {
+    /*if ((_this->egl_data->egl_display == EGL_NO_DISPLAY) && (_this->egl_data->eglGetDisplay != NULL)) {
         _this->egl_data->egl_display = _this->egl_data->eglGetDisplay(native_display);
-    }
+    }*/
     if (_this->egl_data->egl_display == EGL_NO_DISPLAY) {
         _this->gl_config.driver_loaded = 0;
         *_this->gl_config.driver_path = '\0';
